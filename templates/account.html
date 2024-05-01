@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Account</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Account Page</h1>
+    <h2>Username: {{ current_user.username }}</h2>
+    <h2>User ID: {{ current_user.id }}</h2>
+
+    <br><br>
+
+    <h2>My Favorite Games</h2>
+    <div class="w3-container">
+        {% if favorite_games %}
+            {% for game in favorite_games %}
+                <div class="game-container">
+                    <!-- Display game info -->
+                    <div class="game-info">
+                        <h3>{{ game['Name'] }}</h3>
+                        <!-- Other game details here -->
+                        <!-- Form to remove game from favorites -->
+                        <form action="{{ url_for('remove_favorite', game_id=game['Game_ID']) }}" method="post">
+                            <input type="hidden" name="game_id" value="{{ game['Game_ID'] }}">
+                            <button type="submit">Remove</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>You have no favorite games yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

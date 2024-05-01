@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Register</title>
+</head>
+<body class="w3-container">
+    {% include 'navbar_user.html' %}
+
+    <h1>Register</h1>
+    <form method="post" class="w3-container w3-card-4 w3-padding">
+        <label>Username</label>
+        <input type="text" name="username" class="w3-input w3-border" required>
+        <label>Password</label>
+        <input type="password" name="password" class="w3-input w3-border" required>
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" class="w3-input w3-border" required>
+        <label>Role</label>
+        <select name="role" class="w3-select w3-border" required>
+            <option value="user">User</option>
+            <option value="coordinator">Coordinator</option>
+            <option value="sponsor">Sponsor</option>
+        </select>
+        <button type="submit" class="w3-button w3-green">Register</button>
+    </form>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+        <div class="w3-panel w3-{{ category }} w3-display-container">
+            <span onclick="this.parentElement.style.display='none'"
+                  class="w3-button w3-{{ category }} w3-large w3-display-topright">&times;</span>
+            {{ message }}
+        </div>
+    {% endfor %}
+</body>
+</html>

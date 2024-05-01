@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Events</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Events</h1>
+    <ul>
+        {% for event in events %}
+            <li>
+                <a href="{{ url_for('event_details', event_id=event[0]) }}">
+                    {{ event[1] }} - Starts at: {{ event[2] | unixtimestampformat }} - Ends at: {{ event[3] | unixtimestampformat }}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

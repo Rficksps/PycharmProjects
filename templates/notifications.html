@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Notifications</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+<h1>Notifications</h1>
+<ul>
+    {% for notification in notifications %}
+        <li>
+            {{ notification[0] }}: {{ notification[1] }} - Status: {{ notification[3] }}
+            {% if notification[0] == 'Event' %}
+                <form action="{{ url_for('respond_to_invite', invite_id=notification[2]) }}" method="post">
+            {% else %}
+                <form action="{{ url_for('respond_to_friend_request', request_id=notification[2]) }}" method="post">
+            {% endif %}
+                <button type="submit" name="response" value="accept">Accept</button>
+                <button type="submit" name="response" value="decline">Decline</button>
+            </form>
+        </li>
+    {% endfor %}
+</ul>
+
+
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Login</title>
+</head>
+<body class="w3-container">
+    {% include 'navbar_user.html' %}
+
+    <h1>Login</h1>
+    <form method="post" class="w3-container w3-card-4 w3-padding">
+        <label>Username</label>
+        <input type="text" name="username" class="w3-input w3-border" required>
+        <label>Password</label>
+        <input type="password" name="password" class="w3-input w3-border" required>
+        <button type="submit" class="w3-button w3-blue">Login</button>
+    </form>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+        <div class="w3-panel w3-{{ category }} w3-display-container">
+            <span onclick="this.parentElement.style.display='none'"
+                  class="w3-button w3-{{ category }} w3-large w3-display-topright">&times;</span>
+            {{ message }}
+        </div>
+    {% endfor %}
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tournament Details</title>
+</head>
+<body>
+    <h1>Tournament Details</h1>
+    <div>
+        <h2>{{ tournament[1] }}</h2>
+        <p>Description: {{ tournament[4] }}</p>
+        <p>Start Time: {{ tournament[2] | unixtimestampformat }}</p>
+        <p>End Time: {{ tournament[3] | unixtimestampformat }}</p>
+
+        {% if session['user_id'] == tournament[5] %}
+            <form action="{{ url_for('send_tournament_invite', tournament_id=tournament[0]) }}" method="post">
+                <input type="text" name="user_id" placeholder="Enter User ID to invite" />
+                <button type="submit">Send Invite</button>
+            </form>
+        {% endif %}
+
+        <h3>Participants:</h3>
+        <ul>
+            {% for participant in participants %}
+                <li>{{ participant[1] }} (ID: {{ participant[0] }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <a href="{{ url_for('display_tournaments') }}">Back to Tournaments</a>
+</body>
+</html>

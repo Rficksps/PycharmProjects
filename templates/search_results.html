@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Search Results</title>
+    <style>
+        .game-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px; /* Add gap between game entries */
+            overflow: hidden; /* Ensure content fits within the container */
+        }
+        .game-container img {
+            margin-right: 20px; /* Gap between the image and the text */
+            width: 800px; /* Fixed width for consistency */
+            height: 450px; /* Fixed height based on the aspect ratio of YouTube thumbnails (16:9) */
+            object-fit: cover; /* Cover ensures the image covers the set width/height, may crop image if necessary */
+        }
+        .game-info {
+            flex: 1;
+        }
+    </style>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Search Results</h1>
+    <div class="w3-container">
+        {% if game_matches %}
+            {% for game in game_matches %}
+                {% set video_id = game['Youtube_URL'].split('v=')[-1] %}
+                <div class="game-container">
+                    <img src="https://img.youtube.com/vi/{{ video_id }}/0.jpg" alt="Video Thumbnail" onerror="this.onerror=null; this.src='https://via.placeholder.com/700x394';">
+                    <div class="game-info">
+                        <h2>{{ game['Name'] }}</h2>
+                        <p>Genre: {{ game['Genre'] }}</p>
+                        <p>Publisher: {{ game['Publisher'] }}</p>
+                        <p>Release Year: {{ game['Year_of_Release'] }}</p>
+                        <p>Platform: {{ game['Platform'] }}</p>
+                        <p>Critic Score: {{ game['Critic_Score'] }}</p>
+                        <p>User Score: {{ game['User_Score'] }}</p>
+                        <p>Developer: {{ game['Developer'] }}</p>
+                        <p>Age Rating: {{ game['Rating'] }}</p>
+                        <p>IGN Phrase: {{ game['ign_phrase'] }}</p>
+                        <p>IGN Score: {{ game['ign_score'] }}</p>
+                        <form action="{{ url_for('favorite_game') }}" method="post">
+                            <input type="hidden" name="game_id" value="{{ game['Game_ID'] }}">
+                            <button type="submit">Favorite</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No results found.</p>
+        {% endif %}
+    </div>
+
+</body>
+</html>

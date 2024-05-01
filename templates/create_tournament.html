@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Create Tournament</title>
+</head>
+<body class="w3-container">
+    {% include 'navbar_coordinator.html' %}
+
+    <h1>Create Tournament</h1>
+
+    <form action="{{ url_for('create_tournament') }}" method="post" enctype="multipart/form-data">
+        <label for="tournament_name">Tournament Name:</label>
+        <input type="text" id="tournament_name" name="tournament_name" required><br>
+
+        <label for="tournament_description">Tournament Description:</label><br>
+        <textarea id="tournament_description" name="tournament_description" rows="4" cols="50" required></textarea><br>
+
+        <label for="tournament_start_time">Start Time:</label>
+        <input type="datetime-local" id="tournament_start_time" name="tournament_start_time" required><br>
+
+        <label for="tournament_end_time">End Time:</label>
+        <input type="datetime-local" id="tournament_end_time" name="tournament_end_time" required><br>
+
+        <input type="submit" value="Create Tournament" class="w3-button w3-green">
+    </form>
+
+    <a href="{{ url_for('home') }}" class="w3-button w3-blue">Back to Home</a>
+</body>
+</html>

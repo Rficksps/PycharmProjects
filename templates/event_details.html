@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Event Details</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Event Details</h1>
+
+    <div>
+        <h2>{{ event[1] }}</h2>
+        <p>Description: {{ event[4] }}</p>
+        <p>Start Time: {{ event[2] | unixtimestampformat }}</p>
+        <p>End Time: {{ event[3] | unixtimestampformat }}</p>
+
+        {% if session['user_id'] == event[5] %}  <!-- Assuming event[5] is creator_id -->
+            <form action="{{ url_for('send_invite', event_id=event[0]) }}" method="post">
+                <input type="text" name="user_id" placeholder="Enter User ID to invite" />
+                <button type="submit">Send Invite</button>
+            </form>
+            <h3>Attendees:</h3>
+            <ul>
+                {% for attendee in attendees %}
+                    <li>{{ attendee[1] }} (ID: {{ attendee[0] }})</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+
+    </div>
+
+    <a href="{{ url_for('display_events') }}" class="w3-button w3-blue">Back to Events</a>
+</body>
+</html>

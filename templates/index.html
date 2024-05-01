@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Home</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+    <h1>Welcome</h1>
+    {% if session['user'] %}
+        <p>You are logged in as {{ session['user'] }}!</p>
+        <a href="{{ url_for('logout') }}" class="w3-button w3-red">Logout</a>
+    {% else %}
+        <a href="{{ url_for('login') }}" class="w3-button w3-blue">Login</a>
+        <a href="{{ url_for('register') }}" class="w3-button w3-green">Register</a>
+    {% endif %}
+</body>
+</html>

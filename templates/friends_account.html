@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Friend's Account</title>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Friend's Account Page</h1>
+    <h2>Username: {{ friend_info[1] }}</h2> <!-- [1] corresponds to the username -->
+    <h2>User ID: {{ friend_info[0] }}</h2> <!-- [0] corresponds to the user ID -->
+
+    <br><br>
+
+    <h2>Favorite Games</h2>
+    <div class="w3-container">
+        {% if favorite_games %}
+            {% for game in favorite_games %}
+                <div class="game-container">
+                    <!-- Display game info -->
+                    <div class="game-info">
+                        <h3>{{ game['Name'] }}</h3>
+                        <!-- Other details about the game -->
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>This friend has no favorite games yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
