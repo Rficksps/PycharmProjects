@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <title>Create Match</title>
+    <script>
+        function selectPlayer(player) {
+            document.getElementById('playerInput').value = player;
+            document.getElementById('selectPlayerModal').style.display = 'none';
+        }
+    </script>
+</head>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
+    <h1>Create Match</h1>
+    <form action="{{ url_for('create_match', tournament_id=tournament_id) }}" method="post">
+        <label for="player1_id">Player 1:</label>
+        <input type="text" id="player1_id" name="player1_id" readonly onclick="document.getElementById('selectPlayerModal1').style.display='block'">
+        <br>
+        <label for="player2_id">Player 2:</label>
+        <input type="text" id="player2_id" name="player2_id" readonly onclick="document.getElementById('selectPlayerModal2').style.display='block'">
+        <br>
+        <button type="submit">Create Match</button>
+    </form>
+
+    <div id="selectPlayerModal1" class="w3-modal">
+        <div class="w3-modal-content">
+            <span onclick="document.getElementById('selectPlayerModal1').style.display='none'" class="w3-button w3-display-topright">&times;</span>
+            <h2>Select Player 1</h2>
+            <ul>
+                {% for attendee in attendees %}
+                    <li><a href="#" onclick="document.getElementById('player1_id').value='{{ attendee[0] }}'; document.getElementById('selectPlayerModal1').style.display='none';">{{ attendee[1] }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div id="selectPlayerModal2" class="w3-modal">
+        <div class="w3-modal-content">
+            <span onclick="document.getElementById('selectPlayerModal2').style.display='none'" class="w3-button w3-display-topright">&times;</span>
+            <h2>Select Player 2</h2>
+            <ul>
+                {% for attendee in attendees %}
+                    <li><a href="#" onclick="document.getElementById('player2_id').value='{{ attendee[0] }}'; document.getElementById('selectPlayerModal2').style.display='none';">{{ attendee[1] }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <a href="{{ url_for('tournament_details', tournament_id=tournament_id) }}">Back to Tournament Details</a>
+</body>
+</html>

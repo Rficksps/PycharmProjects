@@ -50,13 +50,10 @@
                         <p>IGN Phrase: {{ game['ign_phrase'] }}</p>
                         <p>IGN Score: {{ game['ign_score'] }}</p>
 
-                        <form action="{{ url_for('favorite_game') }}" method="post">
-                                <input type="hidden" name="game_id" value="{{ game['Game_ID'] }}">
-                                <button type="submit">Favorite</button>
-                            </form>
-
-
-
+                        <form action="{{ url_for('select_game') }}" method="post">
+                            <input type="hidden" name="game_id" value="{{ game['Game_ID'] }}">
+                            <button type="submit">Select Game</button>
+                        </form>
                     </div>
                 </div>
             {% endfor %}
@@ -64,6 +61,8 @@
             <p>No results found.</p>
         {% endif %}
     </div>
-
 </body>
 </html>
+
+
+

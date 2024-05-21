@@ -7,8 +7,10 @@
 <body class="w3-container">
     {% if session.get('role') == 'coordinator' %}
         {% include 'navbar_coordinator.html' %}
-    {% else %}
+    {% elif session.get('role') == 'user' %}
         {% include 'navbar_user.html' %}
+    {% elif session.get('role') == 'sponsor' %}
+        {% include 'navbar_sponsor.html' %}
     {% endif %}
     <h1>Welcome</h1>
     {% if session['user'] %}

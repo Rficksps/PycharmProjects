@@ -7,13 +7,16 @@
 <body class="w3-container">
     {% if session.get('role') == 'coordinator' %}
         {% include 'navbar_coordinator.html' %}
-    {% else %}
+    {% elif session.get('role') == 'user' %}
         {% include 'navbar_user.html' %}
+    {% elif session.get('role') == 'sponsor' %}
+        {% include 'navbar_sponsor.html' %}
     {% endif %}
 
     <h1>Friend's Account Page</h1>
-    <h2>Username: {{ friend_info[1] }}</h2> <!-- [1] corresponds to the username -->
-    <h2>User ID: {{ friend_info[0] }}</h2> <!-- [0] corresponds to the user ID -->
+    <h2>Username: {{ friend_info[1] }}</h2>
+    <h2>User ID: {{ friend_info[0] }}</h2>
+    <h2>Wins: {{ friend_info[2] }}</h2>
 
     <br><br>
 
@@ -22,10 +25,8 @@
         {% if favorite_games %}
             {% for game in favorite_games %}
                 <div class="game-container">
-                    <!-- Display game info -->
                     <div class="game-info">
                         <h3>{{ game['Name'] }}</h3>
-                        <!-- Other details about the game -->
                     </div>
                 </div>
             {% endfor %}
@@ -35,3 +36,4 @@
     </div>
 </body>
 </html>
+

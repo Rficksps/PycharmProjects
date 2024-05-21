@@ -1,31 +1,30 @@
 import datetime
 import sqlite3
 import time
-from datetime import timezone
 import pandas as pd
-
-
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from datetime import timezone
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from markupsafe import Markup
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 's3cr3t'
 
 def init_db():
     with app.app_context():
-        db = sqlite3.connect('events3.db')  # Use 'events3.db' for events
+        db = sqlite3.connect('events3.db')
         cursor = db.cursor()
-        cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT, wins INTEGER DEFAULT 0)''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, start_date UNIX TIME, end_date UNIX TIME, description TEXT, creator_id INTEGER)''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS invitations (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, sender_id INTEGER, receiver_id INTEGER, status TEXT, FOREIGN KEY (event_id) REFERENCES events(id), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (receiver_id) REFERENCES users(id))''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS event_invitations (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, sender_id INTEGER, receiver_id INTEGER, status TEXT, FOREIGN KEY (event_id) REFERENCES events(id), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (receiver_id) REFERENCES users(id))''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS user_events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, event_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (event_id) REFERENCES events(id))''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS user_tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, tournament_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (tournament_id) REFERENCES tournaments(id))''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS friend_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, sender_id INTEGER, receiver_id INTEGER, status TEXT, FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (receiver_id) REFERENCES users(id))''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS user_favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, game_id INTEGER, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (game_id) REFERENCES game(id))''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, start_date UNIX TIME, end_date UNIX TIME, description TEXT, creator_id INTEGER)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS tournaments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, start_date UNIX TIME, end_date UNIX TIME, description TEXT, creator_id INTEGER, game_id INTEGER, FOREIGN KEY (game_id) REFERENCES game(id))''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS tournament_invitations (id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER, sender_id INTEGER, receiver_id INTEGER, status TEXT, FOREIGN KEY (tournament_id) REFERENCES tournaments(id), FOREIGN KEY (sender_id) REFERENCES users(id), FOREIGN KEY (receiver_id) REFERENCES users(id))''')
-
+        cursor.execute('''CREATE TABLE IF NOT EXISTS matches (id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER, player1_id INTEGER, player2_id INTEGER, result TEXT, FOREIGN KEY (tournament_id) REFERENCES tournaments(id), FOREIGN KEY (player1_id) REFERENCES users(id), FOREIGN KEY (player2_id) REFERENCES users(id))''')
         db.commit()
 
 
@@ -43,7 +42,7 @@ def register():
         role = request.form['role']
 
         if password != confirm_password:
-            flash('Passwords do not match!', 'danger')
+            flash('Passwords do not match')
             return render_template('register.html')
 
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
@@ -52,10 +51,10 @@ def register():
                 cursor = db.cursor()
                 cursor.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', (username, hashed_password, role))
                 db.commit()
-            flash('Registered successfully!', 'success')
             return redirect(url_for('login'))
+        # Handles the case where the username already exists
         except sqlite3.IntegrityError:
-            flash('Username already exists!', 'danger')
+            flash('Username already exists')
 
     return render_template('register.html')
 
@@ -68,21 +67,25 @@ def login():
         password = request.form['password']
         with sqlite3.connect('events3.db') as db:
             cursor = db.cursor()
+            # Fetch the user from the database
             cursor.execute('SELECT id, username, password, role FROM users WHERE username = ?', (username,))
             user = cursor.fetchone()
+            # Check if the user exists and the password is correct
             if user and check_password_hash(user[2], password):
                 session['user_id'] = user[0]  # user's id
                 session['user'] = user[1]  # user's username
                 session['role'] = user[3]  # user's role
+                # Redirect to the home page
                 return redirect(url_for('home'))
             else:
-                flash('Invalid username or password!', 'danger')
+                flash('Invalid username or password')
     return render_template('login.html')
 
 
 
 @app.route('/logout')
 def logout():
+    # Clear the session
     session.pop('user', None)
     return redirect(url_for('home'))
 
@@ -90,25 +93,25 @@ def logout():
 @app.route('/events', methods=['GET'])
 def display_events():
     if 'user' not in session:
-        flash('You must be logged in to view events.', 'danger')
+        flash('You must be logged in to view events')
         return redirect(url_for('login'))
 
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
-
     user_id = session.get('user_id')
-    # Select distinct events to avoid duplicates
+    # Query to select events created by the user or where the user has accepted an invitation
     query = '''
         SELECT DISTINCT e.* FROM events e
         LEFT JOIN user_events ue ON e.id = ue.event_id
         WHERE e.creator_id = ? OR (ue.user_id = ? AND ue.event_id IS NOT NULL)
     '''
     cursor.execute(query, (user_id, user_id))
-
     events = cursor.fetchall()
     conn.close()
 
+    # Render the events page with the events
     return render_template('display_events.html', events=events)
+
 
 
 
@@ -134,56 +137,47 @@ def event_details(event_id):
     ''', (event_id,))
     attendees = cursor.fetchall()
 
-    if event:
-        return render_template('event_details.html', event=event, attendees=attendees)
-    else:
-        flash('Event not found!', 'danger')
-        return redirect(url_for('display_events'))
+    return render_template('event_details.html', event=event, attendees=attendees)
 
 
 
 
-from datetime import datetime
+
 
 @app.route('/create_event', methods=['GET', 'POST'])
 def create_event():
+    # Check if the user is logged in and has the role of a user
     if 'user' in session and session['role'] == 'user':
         if request.method == 'POST':
             name = request.form['event_name']
             description = request.form['event_description']
             event_start_time = request.form['event_start_time']
             event_end_time = request.form['event_end_time']
+            event_start_time_obj = datetime.strptime(event_start_time, '%Y-%m-%dT%H:%M')
+            event_end_time_obj = datetime.strptime(event_end_time, '%Y-%m-%dT%H:%M')
+            event_start_time_unix = event_start_time_obj.replace(tzinfo=timezone.utc).timestamp()
+            event_end_time_unix = event_end_time_obj.replace(tzinfo=timezone.utc).timestamp()
 
-            try:
-                event_start_time_obj = datetime.strptime(event_start_time, '%Y-%m-%dT%H:%M')
-                event_end_time_obj = datetime.strptime(event_end_time, '%Y-%m-%dT%H:%M')
-                event_start_time_unix = event_start_time_obj.replace(tzinfo=timezone.utc).timestamp()
-                event_end_time_unix = event_end_time_obj.replace(tzinfo=timezone.utc).timestamp()
+            conn = sqlite3.connect('events3.db')
+            cursor = conn.cursor()
 
-                conn = sqlite3.connect('events3.db')
-                cursor = conn.cursor()
+            creator_id = session.get('user_id')
 
-                creator_id = session.get('user_id')
+            insert_query = 'INSERT INTO events (name, description, start_date, end_date, creator_id) VALUES (?, ?, ?, ?, ?)'
+            cursor.execute(insert_query, (name, description, event_start_time_unix, event_end_time_unix, creator_id))
+            conn.commit()
 
-                insert_query = 'INSERT INTO events (name, description, start_date, end_date, creator_id) VALUES (?, ?, ?, ?, ?)'
-                cursor.execute(insert_query, (name, description, event_start_time_unix, event_end_time_unix, creator_id))
-                conn.commit()
+            # Get the ID of the newly created event
+            event_id = cursor.lastrowid
 
-                event_id = cursor.lastrowid  # Get the ID of the newly created event
+            conn.close()
+            # Redirect to the details page of the new event
+            return redirect(url_for('event_details', event_id=event_id))
 
-                conn.close()
-
-                flash('Event created successfully!', 'success')
-                return redirect(url_for('event_details', event_id=event_id))  # Redirect to the details page of the new event
-
-            except ValueError:
-                flash('Invalid event time format!', 'danger')
-                return render_template('create_event.html')
 
         return render_template('create_event.html')
-    else:
-        flash('You must be a user to access this page.', 'danger')
-        return redirect(url_for('login'))
+
+
 
 
 
@@ -191,41 +185,50 @@ def create_event():
 
 @app.route('/create_tournament', methods=['GET', 'POST'])
 def create_tournament():
+    # Check if the user is logged in and has the role of a coordinator
     if 'user' in session and session['role'] == 'coordinator':
+        # Set the selected game name to None
+        selected_game_name = None
+        selected_game_id = session.get('selected_game_id')
+        # If a game is selected, fetch the game name from the Excel file
+        if selected_game_id:
+            df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
+            selected_game = df[df['Game_ID'] == selected_game_id].iloc[0]
+            selected_game_name = selected_game['Name']
+        # If the form is submitted
         if request.method == 'POST':
             name = request.form['tournament_name']
             description = request.form['tournament_description']
             start_time = request.form['tournament_start_time']
             end_time = request.form['tournament_end_time']
+            game_id = selected_game_id
 
-            try:
-                start_time_obj = datetime.strptime(start_time, '%Y-%m-%dT%H:%M')
-                end_time_obj = datetime.strptime(end_time, '%Y-%m-%dT%H:%M')
-                start_time_unix = start_time_obj.replace(tzinfo=timezone.utc).timestamp()
-                end_time_unix = end_time_obj.replace(tzinfo=timezone.utc).timestamp()
 
-                conn = sqlite3.connect('events3.db')
-                cursor = conn.cursor()
-                creator_id = session.get('user_id')
+            start_time_obj = datetime.strptime(start_time, '%Y-%m-%dT%H:%M')
+            end_time_obj = datetime.strptime(end_time, '%Y-%m-%dT%H:%M')
+            start_time_unix = start_time_obj.replace(tzinfo=timezone.utc).timestamp()
+            end_time_unix = end_time_obj.replace(tzinfo=timezone.utc).timestamp()
 
-                insert_query = 'INSERT INTO tournaments (name, description, start_date, end_date, creator_id) VALUES (?, ?, ?, ?, ?)'
-                cursor.execute(insert_query, (name, description, start_time_unix, end_time_unix, creator_id))
-                conn.commit()
+            conn = sqlite3.connect('events3.db')
+            cursor = conn.cursor()
+            creator_id = session.get('user_id')
 
-                tournament_id = cursor.lastrowid  # Get the ID of the newly created tournament
+            insert_query = 'INSERT INTO tournaments (name, description, start_date, end_date, creator_id, game_id) VALUES (?, ?, ?, ?, ?, ?)'
+            cursor.execute(insert_query, (name, description, start_time_unix, end_time_unix, creator_id, game_id))
+            conn.commit()
 
-                conn.close()
-                flash('Tournament created successfully!', 'success')
-                return redirect(url_for('home'))  # Redirect to the home page or tournament details page
+            conn.close()
+            return redirect(url_for('home'))
 
-            except ValueError:
-                flash('Invalid tournament time format!', 'danger')
-                return render_template('create_tournament.html')
 
-        return render_template('create_tournament.html')
+
+        return render_template('create_tournament.html', selected_game_name=selected_game_name)
     else:
-        flash('You must be a coordinator to access this page.', 'danger')
+        flash('You must be a coordinator to access this page')
         return redirect(url_for('login'))
+
+
+
 
 
 
@@ -249,39 +252,31 @@ app.jinja_env.filters['unixtimestampformat'] = unixtimestampformat
 @app.route('/account')
 def account():
     if 'user' not in session:
-        flash('You must be logged in to access your account.', 'danger')
+        flash('You must be logged in to access your account')
         return redirect(url_for('login'))
 
     user_id = session['user_id']
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
 
-    # Get the user's info
-    cursor.execute('SELECT id, username FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT id, username, wins FROM users WHERE id = ?', (user_id,))
     user_info = cursor.fetchone()
 
-    # Get the game IDs of the user's favorite games
-    cursor.execute('''
-        SELECT game_id
-        FROM user_favorites
-        WHERE user_id = ?
-    ''', (user_id,))
+    cursor.execute('SELECT game_id FROM user_favorites WHERE user_id = ?', (user_id,))
     favorite_game_ids = [row[0] for row in cursor.fetchall()]
 
     conn.close()
 
-    # Load the full games DataFrame
     df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
-
-    # Filter the DataFrame to only include the user's favorite games
-    # Assumes there's a 'Game_ID' column in your Excel database
     favorite_games_df = df[df['Game_ID'].isin(favorite_game_ids)]
-
-    # Convert the filtered DataFrame to a list of dictionaries for the template
     favorite_games = favorite_games_df.to_dict('records')
 
-    return render_template('account.html', current_user={'username': user_info[1], 'id': user_info[0]},
-                           favorite_games=favorite_games)
+    return render_template('account.html', current_user={'username': user_info[1], 'id': user_info[0], 'wins': user_info[2]}, favorite_games=favorite_games)
+
+
+
+
+
 
 
 @app.route('/search_games', methods=['GET', 'POST'])
@@ -296,39 +291,42 @@ def search_games():
             # If no search term is provided, return an empty DataFrame or handle accordingly
             filtered_df = pd.DataFrame()
         game_matches = filtered_df.to_dict('records')
-        return render_template('search_results.html', game_matches=game_matches)
+
+        # Check the user's role and render the appropriate template
+        if session.get('role') == 'coordinator':
+            return render_template('tournament_search_results.html', game_matches=game_matches)
+        else:
+            # If the user is not a coordinator, render the search results template
+            return render_template('search_results.html', game_matches=game_matches)
 
     return render_template('search_games.html')
 
 
-
-
-
-
-@app.route('/send_invite/<int:event_id>', methods=['POST'])
-def send_invite(event_id):
-    if 'user' not in session:
-        flash('You must be logged in to send invites.', 'danger')
-        return redirect(url_for('login'))
-
+@app.route('/send_event_invite/<int:event_id>', methods=['POST'])
+def send_event_invite(event_id):
+    # Check if the user is logged in
     user_id = request.form.get('user_id')
+    # Get the ID of the user sending the invitation
     sender_id = session.get('user_id')
 
-    if not user_id:
-        flash('No user ID provided.', 'danger')
-        return redirect(url_for('event_details', event_id=event_id))
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            cursor.execute('INSERT INTO invitations (event_id, sender_id, receiver_id, status) VALUES (?, ?, ?, ?)',
-                           (event_id, sender_id, user_id, 'pending'))
-            db.commit()
-        flash('Invitation sent successfully.', 'success')
-    except Exception as e:
-        flash(str(e), 'danger')
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        cursor.execute('INSERT INTO event_invitations (event_id, sender_id, receiver_id, status) VALUES (?, ?, ?, "pending")',
+                       (event_id, sender_id, user_id))
+        db.commit()
+
 
     return redirect(url_for('event_details', event_id=event_id))
+
+
+
+
+
+
+
+
+
 
 
 
@@ -337,40 +335,41 @@ def send_invite(event_id):
 @app.route('/notifications')
 def notifications():
     user_id = session.get('user_id')
+    if not user_id:
+        flash('You must be logged in to view notifications')
+        return redirect(url_for('login'))
 
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
 
-    # Get event invitations
+    # Fetch event invitations
     cursor.execute('''
-        SELECT 'Event' AS type, events.name, invitations.id, invitations.status
-        FROM invitations 
-        JOIN events ON invitations.event_id = events.id 
-        WHERE invitations.receiver_id = ? AND invitations.status = 'pending'
+        SELECT 'Event' AS type, events.name, event_invitations.id, event_invitations.status
+        FROM event_invitations
+        JOIN events ON event_invitations.event_id = events.id
+        WHERE event_invitations.receiver_id = ? AND event_invitations.status = 'pending'
     ''', (user_id,))
-
     event_notifications = cursor.fetchall()
 
-    # Get friend requests
+    # Fetch tournament invitations
+    cursor.execute('''
+        SELECT 'Tournament' AS type, tournaments.name, tournament_invitations.id, tournament_invitations.status
+        FROM tournament_invitations
+        JOIN tournaments ON tournament_invitations.tournament_id = tournaments.id
+        WHERE tournament_invitations.receiver_id = ? AND tournament_invitations.status = 'pending'
+    ''', (user_id,))
+    tournament_notifications = cursor.fetchall()
+
+    # Fetch friend requests
     cursor.execute('''
         SELECT 'Friend Request' AS type, users.username, friend_requests.id, friend_requests.status
         FROM friend_requests
         JOIN users ON friend_requests.sender_id = users.id
         WHERE friend_requests.receiver_id = ? AND friend_requests.status = 'pending'
     ''', (user_id,))
+    friend_requests = cursor.fetchall()
 
-    friend_notifications = cursor.fetchall()
-
-    cursor.execute('''
-           SELECT 'Tournament' AS type, tournaments.name, tournament_invitations.id, tournament_invitations.status
-           FROM tournament_invitations
-           JOIN tournaments ON tournament_invitations.tournament_id = tournaments.id
-           WHERE tournament_invitations.receiver_id = ? AND tournament_invitations.status = 'pending'
-       ''', (user_id,))
-    tournament_notifications = cursor.fetchall()
-
-    # Combine notifications
-    notifications = event_notifications + friend_notifications + tournament_notifications
+    notifications = event_notifications + tournament_notifications + friend_requests
     conn.close()
 
     return render_template('notifications.html', notifications=notifications)
@@ -378,27 +377,11 @@ def notifications():
 
 
 
-@app.route('/respond_to_invite/<int:invite_id>', methods=['POST'])
-def respond_to_invite(invite_id):
-    response = request.form.get('response')
-    if response not in ['accept', 'decline']:
-        flash('Invalid response.', 'danger')
-        return redirect(url_for('notifications'))
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            cursor.execute('UPDATE invitations SET status = ? WHERE id = ?', (response, invite_id))
-            if response == 'accept':
-                cursor.execute('SELECT event_id FROM invitations WHERE id = ?', (invite_id,))
-                event_id = cursor.fetchone()[0]
-                cursor.execute('INSERT INTO user_events (user_id, event_id) VALUES (?, ?)', (session['user_id'], event_id))
-            db.commit()
-        flash(f'Invitation {response}ed.', 'success')
-    except Exception as e:
-        flash(str(e), 'danger')
 
-    return redirect(url_for('notifications'))
+
+
+
 
 
 
@@ -407,23 +390,19 @@ def respond_to_invite(invite_id):
 @app.route('/send_friend_request', methods=['POST'])
 def send_friend_request():
     if 'user' not in session:
-        flash('You must be logged in to send friend requests.', 'danger')
+        flash('You must be logged in to send friend requests')
         return redirect(url_for('login'))
 
     receiver_id = request.form.get('receiver_id')
     if not receiver_id:
-        flash('No user ID provided.', 'danger')
         return redirect(url_for('friends_list'))
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            cursor.execute('INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, "pending")',
-                           (session['user_id'], receiver_id))
-            db.commit()
-        flash('Friend request sent successfully.', 'success')
-    except Exception as e:
-        flash(str(e), 'danger')
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        cursor.execute('INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, "pending")',
+                       (session['user_id'], receiver_id))
+        db.commit()
 
     return redirect(url_for('friends_list'))
 
@@ -435,17 +414,14 @@ def send_friend_request():
 def respond_to_friend_request(request_id):
     response = request.form.get('response')
     if response not in ['accept', 'decline']:
-        flash('Invalid response.', 'danger')
         return redirect(url_for('notifications'))
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            cursor.execute('UPDATE friend_requests SET status = ? WHERE id = ?', (response, request_id))
-            db.commit()
-        flash(f'Friend request {response}ed.', 'success')
-    except Exception as e:
-        flash(str(e), 'danger')
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        cursor.execute('UPDATE friend_requests SET status = ? WHERE id = ?', (response, request_id))
+        db.commit()
+
 
     return redirect(url_for('notifications'))
 
@@ -456,7 +432,7 @@ def respond_to_friend_request(request_id):
 @app.route('/friends_list')
 def friends_list():
     if 'user' not in session:
-        flash('You must be logged in to view your friends list.', 'danger')
+        flash('You must be logged in to view your friends list')
         return redirect(url_for('login'))
 
     user_id = session.get('user_id')
@@ -483,26 +459,21 @@ def friends_list():
 @app.route('/favorite_game', methods=['POST'])
 def favorite_game():
     if 'user' not in session:
-        flash('You must be logged in to favorite games.', 'danger')
+        flash('You must be logged in to favorite games')
         return redirect(url_for('login'))
 
     user_id = session['user_id']
     game_id = request.form.get('game_id')
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            # Check if the game is already favorited
-            cursor.execute('SELECT id FROM user_favorites WHERE user_id = ? AND game_id = ?', (user_id, game_id))
-            if cursor.fetchone():
-                flash('You have already favorited this game.', 'info')
-            else:
-                cursor.execute('INSERT INTO user_favorites (user_id, game_id) VALUES (?, ?)', (user_id, game_id))
-                db.commit()
-                flash('Game added to favorites.', 'success')
-    except Exception as e:
-        flash('Error adding game to favorites.', 'danger')
-        print(e)
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        # Check if the game is already favorited
+        cursor.execute('SELECT id FROM user_favorites WHERE user_id = ? AND game_id = ?', (user_id, game_id))
+
+        cursor.execute('INSERT INTO user_favorites (user_id, game_id) VALUES (?, ?)', (user_id, game_id))
+        db.commit()
+
 
     return redirect(url_for('search_games'))
 
@@ -513,31 +484,21 @@ def favorite_game():
 @app.route('/friend_account/<int:friend_id>')
 def friend_account(friend_id):
     if 'user' not in session:
-        flash('You must be logged in to view a friend\'s account.', 'danger')
+        flash('You must be logged in to view a friend\'s account')
         return redirect(url_for('login'))
 
-    # Assuming friend_id is the user ID of the friend
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
 
-    # Get the friend's info
-    cursor.execute('SELECT id, username FROM users WHERE id = ?', (friend_id,))
+    cursor.execute('SELECT id, username, wins FROM users WHERE id = ?', (friend_id,))
     friend_info = cursor.fetchone()
 
-    # Get the game IDs of the friend's favorite games
-    cursor.execute('''
-        SELECT game_id
-        FROM user_favorites
-        WHERE user_id = ?
-    ''', (friend_id,))
+    cursor.execute('SELECT game_id FROM user_favorites WHERE user_id = ?', (friend_id,))
     favorite_game_ids = [row[0] for row in cursor.fetchall()]
 
     conn.close()
 
-    # Load the full games DataFrame
     df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
-
-    # Filter the DataFrame to only include the friend's favorite games
     favorite_games_df = df[df['Game_ID'].isin(favorite_game_ids)]
     favorite_games = favorite_games_df.to_dict('records')
 
@@ -552,50 +513,21 @@ def friend_account(friend_id):
 @app.route('/remove_favorite', methods=['POST'])
 def remove_favorite():
     if 'user' not in session:
-        flash('You must be logged in to remove favorites.', 'danger')
+        flash('You must be logged in to remove favorites')
         return redirect(url_for('login'))
 
     user_id = session['user_id']
     game_id = request.form['game_id']
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            # Remove the game from user_favorites
-            cursor.execute('DELETE FROM user_favorites WHERE user_id = ? AND game_id = ?', (user_id, game_id))
-            db.commit()
-            flash('Game removed from favorites.', 'success')
-    except Exception as e:
-        flash('Error removing game from favorites.', 'danger')
-        print(e)
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        # Remove the game from user_favorites
+        cursor.execute('DELETE FROM user_favorites WHERE user_id = ? AND game_id = ?', (user_id, game_id))
+        db.commit()
+
 
     return redirect(url_for('account'))
-
-
-
-
-
-
-@app.route('/search_users', methods=['POST'])
-def search_users():
-    username = request.form.get('username')
-    if not username:
-        flash('Please enter a username.', 'danger')
-        return redirect(url_for('friends_list'))
-
-    user_id = session.get('user_id')  # Retrieve current user's ID from session
-    if not user_id:
-        flash('You must be logged in to perform this action.', 'danger')
-        return redirect(url_for('login'))
-
-    conn = sqlite3.connect('events3.db')
-    cursor = conn.cursor()
-    # Exclude the current user's ID from the results
-    cursor.execute("SELECT id, username FROM users WHERE username LIKE ? AND id != ?", ('%' + username + '%', user_id))
-    users = cursor.fetchall()
-    conn.close()
-
-    return render_template('search_users.html', users=users)
 
 
 
@@ -608,15 +540,20 @@ def search_users():
 @app.route('/tournaments', methods=['GET'])
 def display_tournaments():
     if 'user' not in session:
-        flash('You must be logged in to view tournaments.', 'danger')
+        flash('You must be logged in to view tournaments')
         return redirect(url_for('login'))
 
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
 
     user_id = session.get('user_id')
-    # Select tournaments created by the logged-in user
-    cursor.execute('SELECT * FROM tournaments WHERE creator_id = ?', (user_id,))
+
+    # Query to select tournaments either created by the user or where the user has accepted an invitation
+    cursor.execute('''
+        SELECT DISTINCT t.* FROM tournaments t
+        LEFT JOIN tournament_invitations ti ON ti.tournament_id = t.id
+        WHERE t.creator_id = ? OR (ti.receiver_id = ? AND ti.status = 'accept')
+    ''', (user_id, user_id))
 
     tournaments = cursor.fetchall()
     conn.close()
@@ -624,33 +561,50 @@ def display_tournaments():
     return render_template('display_tournaments.html', tournaments=tournaments)
 
 
-
-
-
-
-
-
 @app.route('/tournament_details/<int:tournament_id>')
 def tournament_details(tournament_id):
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
 
+    # Fetch tournament details
     cursor.execute('SELECT * FROM tournaments WHERE id = ?', (tournament_id,))
     tournament = cursor.fetchone()
 
+
+
+    # Fetch attendees of the tournament
     cursor.execute('''
-        SELECT u.id, u.username 
+        SELECT u.id, u.username
         FROM user_tournaments ut
         JOIN users u ON ut.user_id = u.id
         WHERE ut.tournament_id = ?
     ''', (tournament_id,))
-    participants = cursor.fetchall()
+    attendees = cursor.fetchall()
 
-    if tournament:
-        return render_template('tournament_details.html', tournament=tournament, participants=participants)
-    else:
-        flash('Tournament not found!', 'danger')
-        return redirect(url_for('display_tournaments'))
+    # Fetch the selected game for the tournament from the Excel file
+    game_id = tournament[6]
+    df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
+    selected_game = df[df['Game_ID'] == game_id].iloc[0]
+
+    game = {
+        'Name': selected_game['Name'],
+        'Youtube_URL': selected_game['Youtube_URL']
+    }
+
+    # Fetch matches for the tournament, including the result
+    cursor.execute('''
+        SELECT m.id, u1.username, u2.username, m.result
+        FROM matches m
+        JOIN users u1 ON m.player1_id = u1.id
+        JOIN users u2 ON m.player2_id = u2.id
+        WHERE m.tournament_id = ?
+    ''', (tournament_id,))
+    matches = cursor.fetchall()
+
+    conn.close()
+
+    return render_template('tournament_details.html', tournament=tournament, attendees=attendees, game=game, matches=matches)
+
 
 
 
@@ -663,16 +617,170 @@ def send_tournament_invite(tournament_id):
     user_id = request.form.get('user_id')
     sender_id = session.get('user_id')
 
-    try:
-        with sqlite3.connect('events3.db') as db:
-            cursor = db.cursor()
-            cursor.execute('INSERT INTO tournament_invitations (tournament_id, sender_id, receiver_id, status) VALUES (?, ?, ?, "pending")',
-                           (tournament_id, sender_id, user_id))
-            db.commit()
-        flash('Invitation sent successfully.', 'success')
-    except Exception as e:
-        flash(str(e), 'danger')
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        cursor.execute('INSERT INTO tournament_invitations (tournament_id, sender_id, receiver_id, status) VALUES (?, ?, ?, "pending")',
+                       (tournament_id, sender_id, user_id))
+        db.commit()
+
     return redirect(url_for('tournament_details', tournament_id=tournament_id))
+
+
+@app.route('/respond_to_invite/<type>/<int:invite_id>', methods=['POST'])
+def respond_to_invite(type, invite_id):
+    response = request.form.get('response')
+
+    with sqlite3.connect('events3.db') as db:
+        cursor = db.cursor()
+        if type == 'event':
+            # Update the event_invitations status
+            cursor.execute('UPDATE event_invitations SET status = ? WHERE id = ?', (response, invite_id))
+            db.commit()
+            # If the invitation is accepted, add to user_events
+            if response == 'accept':
+                cursor.execute('SELECT event_id, receiver_id FROM event_invitations WHERE id = ?', (invite_id,))
+                event_id, user_id = cursor.fetchone()
+                cursor.execute('INSERT INTO user_events (user_id, event_id) VALUES (?, ?)', (user_id, event_id))
+                db.commit()
+
+        elif type == 'tournament':
+            cursor.execute('UPDATE tournament_invitations SET status = ? WHERE id = ?', (response, invite_id))
+            db.commit()
+            if response == 'accept':
+                cursor.execute('SELECT tournament_id, receiver_id FROM tournament_invitations WHERE id = ?',
+                               (invite_id,))
+                tournament_id, user_id = cursor.fetchone()
+                cursor.execute('INSERT INTO user_tournaments (user_id, tournament_id) VALUES (?, ?)',
+                               (user_id, tournament_id))
+                db.commit()
+
+
+
+
+
+    return redirect(url_for('notifications'))
+
+
+
+
+
+
+
+
+@app.route('/search_games_for_tournament', methods=['GET', 'POST'])
+def search_games_for_tournament():
+    if request.method == 'POST':
+        game_name = request.form.get('game_name', '')
+        df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
+        if game_name:
+            filtered_df = df[df['Name'].str.contains(game_name, case=False, na=False)]
+        else:
+            filtered_df = pd.DataFrame()
+        game_matches = filtered_df.to_dict('records')
+        return render_template('tournament_search_results.html', game_matches=game_matches)
+    return render_template('search_games.html')
+
+
+@app.route('/select_game', methods=['POST'])
+def select_game():
+    game_id = request.form.get('game_id')
+    session['selected_game_id'] = int(game_id)
+    return redirect(url_for('create_tournament'))
+
+
+@app.route('/create_match/<int:tournament_id>', methods=['GET', 'POST'])
+def create_match(tournament_id):
+    if 'user' not in session or session.get('role') != 'coordinator':
+        flash('You must be a coordinator to access this page')
+        return redirect(url_for('login'))
+
+    conn = sqlite3.connect('events3.db')
+    cursor = conn.cursor()
+
+    # Fetch attendees of the tournament
+    cursor.execute('''
+        SELECT u.id, u.username
+        FROM user_tournaments ut
+        JOIN users u ON ut.user_id = u.id
+        WHERE ut.tournament_id = ?
+    ''', (tournament_id,))
+    attendees = cursor.fetchall()
+
+    if request.method == 'POST':
+        player1_id = request.form.get('player1_id')
+        player2_id = request.form.get('player2_id')
+
+        cursor.execute('INSERT INTO matches (tournament_id, player1_id, player2_id) VALUES (?, ?, ?)',
+                       (tournament_id, player1_id, player2_id))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('tournament_details', tournament_id=tournament_id))
+
+    conn.close()
+    return render_template('create_match.html', attendees=attendees, tournament_id=tournament_id)
+
+
+@app.route('/record_match_result', methods=['POST'])
+def record_match_result():
+
+
+    match_id = request.form.get('match_id')
+    tournament_id = request.form.get('tournament_id')
+    result = request.form.get('result')
+    conn = sqlite3.connect('events3.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT player1_id, player2_id FROM matches WHERE id = ?', (match_id,))
+    match = cursor.fetchone()
+
+    if match:
+        if result == 'tie':
+            result_text = "Tie"
+        else:
+            winner_name, _ = result.split(' won')
+            if winner_name == match[1]:
+                winner_id = match[0]
+            else:
+                winner_id = match[1]
+
+            cursor.execute('UPDATE users SET wins = wins + 1 WHERE username = ?', (winner_name,))
+            result_text = result
+
+        cursor.execute('UPDATE matches SET result = ? WHERE id = ?', (result_text, match_id))
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for('tournament_details', tournament_id=tournament_id))
+
+
+
+
+
+
+
+
+@app.route('/search_users', methods=['GET', 'POST'])
+def search_users():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        if not username:
+            return redirect(url_for('search_users'))
+
+        conn = sqlite3.connect('events3.db')
+        cursor = conn.cursor()
+
+        # Exclude the current user's ID from the results
+        cursor.execute("SELECT id, username FROM users WHERE username LIKE ? AND id != ?", ('%' + username + '%', session.get('user_id')))
+        users = cursor.fetchall()
+        conn.close()
+
+        return render_template('search_users.html', users=users)
+    return render_template('search_users.html')
+
+
+
+
 
 
 

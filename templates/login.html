@@ -5,7 +5,13 @@
     <title>Login</title>
 </head>
 <body class="w3-container">
-    {% include 'navbar_user.html' %}
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% elif session.get('role') == 'user' %}
+        {% include 'navbar_user.html' %}
+    {% elif session.get('role') == 'sponsor' %}
+        {% include 'navbar_sponsor.html' %}
+    {% endif %}
 
     <h1>Login</h1>
     <form method="post" class="w3-container w3-card-4 w3-padding">

@@ -7,13 +7,19 @@
 <body class="w3-container">
     {% if session.get('role') == 'coordinator' %}
         {% include 'navbar_coordinator.html' %}
-    {% else %}
+    {% elif session.get('role') == 'user' %}
         {% include 'navbar_user.html' %}
+    {% elif session.get('role') == 'sponsor' %}
+        {% include 'navbar_sponsor.html' %}
     {% endif %}
 
     <h1>Search for a Game</h1>
 
-    <form action="{{ url_for('search_games') }}" method="post" class="w3-container w3-card-4 w3-padding">
+    {% if session.get('role') == 'coordinator' %}
+        <form action="{{ url_for('search_games_for_tournament') }}" method="post" class="w3-container w3-card-4 w3-padding">
+    {% else %}
+        <form action="{{ url_for('search_games') }}" method="post" class="w3-container w3-card-4 w3-padding">
+    {% endif %}
         <label>Game Name:</label>
         <input type="text" name="game_name" class="w3-input w3-border" required>
         <button type="submit" class="w3-button w3-teal">Search</button>

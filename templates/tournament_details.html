@@ -1,32 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
     <title>Tournament Details</title>
+    <script>
+        function showResultForm(matchId, player1, player2, tournamentId) {
+            document.getElementById('resultForm').style.display = 'block';
+            document.getElementById('matchId').value = matchId;
+            document.getElementById('tournamentId').value = tournamentId;
+            document.getElementById('player1Button').innerText = player1 + ' won';
+            document.getElementById('player1Button').value = player1 + ' won';
+            document.getElementById('player2Button').innerText = player2 + ' won';
+            document.getElementById('player2Button').value = player2 + ' won';
+        }
+
+        function closeResultForm() {
+            document.getElementById('resultForm').style.display = 'none';
+        }
+    </script>
 </head>
-<body>
+<body class="w3-container">
+    {% if session.get('role') == 'coordinator' %}
+        {% include 'navbar_coordinator.html' %}
+    {% else %}
+        {% include 'navbar_user.html' %}
+    {% endif %}
+
     <h1>Tournament Details</h1>
     <div>
         <h2>{{ tournament[1] }}</h2>
         <p>Description: {{ tournament[4] }}</p>
         <p>Start Time: {{ tournament[2] | unixtimestampformat }}</p>
         <p>End Time: {{ tournament[3] | unixtimestampformat }}</p>
+        {% if game %}
+            <p>Game: {{ game['Name'] }}</p>
+            <img src="https://img.youtube.com/vi/{{ game['Youtube_URL'].split('v=')[-1] }}/0.jpg" alt="Video Thumbnail" onerror="this.onerror=null; this.src='https://via.placeholder.com/700x394';">
+        {% else %}
+            <p>Game: Not selected</p>
+        {% endif %}
 
+        <br><br>
+
+        <h3>Attendees:</h3>
         {% if session['user_id'] == tournament[5] %}
             <form action="{{ url_for('send_tournament_invite', tournament_id=tournament[0]) }}" method="post">
                 <input type="text" name="user_id" placeholder="Enter User ID to invite" />
                 <button type="submit">Send Invite</button>
             </form>
         {% endif %}
-
-        <h3>Participants:</h3>
         <ul>
-            {% for participant in participants %}
-                <li>{{ participant[1] }} (ID: {{ participant[0] }})</li>
+            {% for attendee in attendees %}
+                <li>{{ attendee[1] }} (ID: {{ attendee[0] }})</li>
             {% endfor %}
         </ul>
-    </div>
 
-    <a href="{{ url_for('display_tournaments') }}">Back to Tournaments</a>
+        <br>
+
+        <h3>Matches:</h3>
+        {% if session.get('role') == 'coordinator' %}
+            <a href="{{ url_for('create_match', tournament_id=tournament[0]) }}" class="w3-button w3-blue">Create Match</a>
+        {% endif %}
+        <ul>
+            {% for match in matches %}
+                <li>
+                    <a href="#" onclick="showResultForm('{{ match[0] }}', '{{ match[1] }}', '{{ match[2] }}', '{{ tournament[0] }}')">
+                        {{ match[1] }} vs {{ match[2] }}
+                    </a> - Result: {{ match[3] }}
+                </li>
+            {% endfor %}
+        </ul>
+
+        <div id="resultForm" class="w3-modal">
+            <div class="w3-modal-content">
+                <span onclick="closeResultForm()" class="w3-button w3-display-topright">&times;</span>
+                <h2>Record Match Result</h2>
+                <form action="{{ url_for('record_match_result') }}" method="post">
+                    <input type="hidden" id="matchId" name="match_id">
+                    <input type="hidden" id="tournamentId" name="tournament_id">
+                    <button type="submit" name="result" id="player1Button"></button>
+                    <button type="submit" name="result" id="player2Button"></button>
+                    <button type="submit" name="result" value="Tie">Tie</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <br><br>
+    <a href="{{ url_for('display_tournaments') }}" class="w3-button w3-red">Back to Tournaments</a>
 </body>
 </html>

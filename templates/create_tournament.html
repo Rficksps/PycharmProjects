@@ -10,6 +10,13 @@
     <h1>Create Tournament</h1>
 
     <form action="{{ url_for('create_tournament') }}" method="post" enctype="multipart/form-data">
+          <label>Game:</label>
+        <button type="button" onclick="window.location.href='{{ url_for('search_games_for_tournament') }}'">Select Game</button>
+        {% if selected_game_name %}
+            <input type="hidden" name="game_id" value="{{ session['selected_game_id'] }}">
+            <p>Selected Game: {{ selected_game_name }}</p>
+        {% endif %}
+
         <label for="tournament_name">Tournament Name:</label>
         <input type="text" id="tournament_name" name="tournament_name" required><br>
 
@@ -22,9 +29,12 @@
         <label for="tournament_end_time">End Time:</label>
         <input type="datetime-local" id="tournament_end_time" name="tournament_end_time" required><br>
 
+
+
         <input type="submit" value="Create Tournament" class="w3-button w3-green">
     </form>
 
     <a href="{{ url_for('home') }}" class="w3-button w3-blue">Back to Home</a>
 </body>
 </html>
+

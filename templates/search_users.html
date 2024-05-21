@@ -3,22 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <title>Search Users</title>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
 </head>
 <body>
-    <h1>Search Results</h1>
-    <ul>
-        {% for user in users %}
-            <li>
-                {{ user[1] }} (ID: {{ user[0] }})
-                <!-- Form to send friend request -->
-                <form action="{{ url_for('send_friend_request') }}" method="POST">
-                    <input type="hidden" name="receiver_id" value="{{ user[0] }}" />
-                    <button type="submit">Send Friend Request</button>
-                </form>
-            </li>
-        {% else %}
-            <li>No results found.</li>
-        {% endfor %}
-    </ul>
+    {% include 'navbar_sponsor.html' %}
+    <div class="w3-container">
+        <h1>Search Users</h1>
+        <form method="POST" action="{{ url_for('search_users') }}" class="w3-container w3-card-4 w3-light-grey w3-text-teal w3-margin">
+            <h2 class="w3-center">Search for Users</h2>
+            <div class="w3-row w3-section">
+                <div class="w3-rest">
+                    <input class="w3-input w3-border" name="username" type="text" placeholder="Enter username">
+                </div>
+            </div>
+            <button class="w3-button w3-block w3-teal w3-section w3-padding" type="submit">Search</button>
+        </form>
+
+        {% if users %}
+            <h2>Search Results:</h2>
+            <ul class="w3-ul w3-card-4">
+                {% for user in users %}
+                    <li class="w3-padding-16">
+                        <span>{{ user[1] }}</span>
+                        <a href="{{ url_for('friend_account', friend_id=user[0]) }}" class="w3-button w3-right w3-teal">View Profile</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% elif users is not none %}
+            <p>No users found.</p>
+        {% endif %}
+    </div>
 </body>
 </html>
