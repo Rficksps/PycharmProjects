@@ -1,3 +1,4 @@
+#importing the required libraries
 import datetime
 import sqlite3
 import time
@@ -11,6 +12,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = 's3cr3t'
 
+# Function to initialise the database, creating all of the data tables if they do not already exist
 def init_db():
     with app.app_context():
         db = sqlite3.connect('events3.db')
@@ -29,30 +31,38 @@ def init_db():
 
 
 
+# Route to the home page
 @app.route('/')
 def home():
     return render_template('index.html')
 
+
+# Route to the register page
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
+        # Get the user inputs for username, password, confirm_password, and role
         username = request.form['username']
         password = request.form['password']
+        # Confirm password is used to verify the password, comply with Australian Privacy Act
         confirm_password = request.form['confirm_password']
         role = request.form['role']
 
+        # Check if the password and confirm_password match, if not flash message and return to register page
         if password != confirm_password:
             flash('Passwords do not match')
             return render_template('register.html')
 
+        # Hash the password before storing it in the database, comply with Australian Privacy Act
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        # Try to insert the user into the database
         try:
             with sqlite3.connect('events3.db') as db:
                 cursor = db.cursor()
                 cursor.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', (username, hashed_password, role))
                 db.commit()
             return redirect(url_for('login'))
-        # Handles the case where the username already exists
+        # If it cannot connect to DB, flash message and return to register page
         except sqlite3.IntegrityError:
             flash('Username already exists')
 
@@ -60,6 +70,7 @@ def register():
 
 
 
+# Route to the login page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -83,6 +94,7 @@ def login():
 
 
 
+# Route to the logout page
 @app.route('/logout')
 def logout():
     # Clear the session
@@ -90,6 +102,7 @@ def logout():
     return redirect(url_for('home'))
 
 
+# Route to the events page
 @app.route('/events', methods=['GET'])
 def display_events():
     if 'user' not in session:
@@ -118,7 +131,7 @@ def display_events():
 
 
 
-
+# Route to the event details page
 @app.route('/event_details/<int:event_id>')
 def event_details(event_id):
     conn = sqlite3.connect('events3.db')
@@ -143,11 +156,12 @@ def event_details(event_id):
 
 
 
-
+# Route to create an event
 @app.route('/create_event', methods=['GET', 'POST'])
 def create_event():
     # Check if the user is logged in and has the role of a user
     if 'user' in session and session['role'] == 'user':
+        # If the form is submitted, create the event, store all data fields in the database, and redirect to the event details page
         if request.method == 'POST':
             name = request.form['event_name']
             description = request.form['event_description']
@@ -182,7 +196,7 @@ def create_event():
 
 
 
-
+# Route to create a tournament
 @app.route('/create_tournament', methods=['GET', 'POST'])
 def create_tournament():
     # Check if the user is logged in and has the role of a coordinator
@@ -195,7 +209,7 @@ def create_tournament():
             df = pd.read_excel('1Cleaned_Game_Data.xlsx', engine='openpyxl')
             selected_game = df[df['Game_ID'] == selected_game_id].iloc[0]
             selected_game_name = selected_game['Name']
-        # If the form is submitted
+        # If the form is submitted, create the tournament, store all data fields in the database, and redirect to the home page
         if request.method == 'POST':
             name = request.form['tournament_name']
             description = request.form['tournament_description']
@@ -241,7 +255,7 @@ def create_tournament():
 
 
 
-
+# Custom Jinja filter to format Unix timestamps as human-readable dates
 def unixtimestampformat(value):
     formatted_date = time.strftime('%H:%M/%d/%m/%Y', time.localtime(value))
     return Markup(formatted_date)
@@ -249,12 +263,17 @@ def unixtimestampformat(value):
 app.jinja_env.filters['unixtimestampformat'] = unixtimestampformat
 
 
+
+
+# Route to the account page
 @app.route('/account')
 def account():
+    # Check if the user is logged in, if not flash message and return to login page
     if 'user' not in session:
         flash('You must be logged in to access your account')
         return redirect(url_for('login'))
 
+    # Fetch the user's information from the database, including the user's favorite games, and render the account page
     user_id = session['user_id']
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
@@ -278,8 +297,9 @@ def account():
 
 
 
-
+# Route to the search games page
 @app.route('/search_games', methods=['GET', 'POST'])
+# Function to search games, if the user is a coordinator, render the tournament search results template, otherwise render the search results template
 def search_games():
     if request.method == 'POST':
         game_name = request.form.get('game_name', '')  # Make sure this matches the name attribute in your form input
@@ -302,7 +322,11 @@ def search_games():
     return render_template('search_games.html')
 
 
+
+
+# Route to send event invite
 @app.route('/send_event_invite/<int:event_id>', methods=['POST'])
+# Function to send event invite, if the user is not logged in, flash message and return to login page, otherwise send the invitation and redirect to the event details page
 def send_event_invite(event_id):
     # Check if the user is logged in
     user_id = request.form.get('user_id')
@@ -331,8 +355,9 @@ def send_event_invite(event_id):
 
 
 
-
+# Route to notifications page
 @app.route('/notifications')
+# Function to display notifications, if the user is not logged in, flash message and return to login page, otherwise fetch event invitations, tournament invitations, and friend requests, and render the notifications page
 def notifications():
     user_id = session.get('user_id')
     if not user_id:
@@ -386,9 +411,10 @@ def notifications():
 
 
 
-
+# Route to send friend request
 @app.route('/send_friend_request', methods=['POST'])
 def send_friend_request():
+# Function to send friend request, if the user is not logged in, flash message and return to login page, otherwise send the friend request and redirect to the friends list page
     if 'user' not in session:
         flash('You must be logged in to send friend requests')
         return redirect(url_for('login'))
@@ -409,8 +435,9 @@ def send_friend_request():
 
 
 
-
+# Route to respond to friend request
 @app.route('/respond_to_friend_request/<int:request_id>', methods=['POST'])
+# Function to respond to friend request, if the user is not logged in, flash message and return to login page, otherwise respond to the friend request and redirect to the notifications page
 def respond_to_friend_request(request_id):
     response = request.form.get('response')
     if response not in ['accept', 'decline']:
@@ -428,9 +455,10 @@ def respond_to_friend_request(request_id):
 
 
 
-
+# Route to the friends list page
 @app.route('/friends_list')
 def friends_list():
+# Function to display the friends list, if the user is not logged in, flash message and return to login page, otherwise fetch the friends of the user and render the friends list page
     if 'user' not in session:
         flash('You must be logged in to view your friends list')
         return redirect(url_for('login'))
@@ -456,8 +484,10 @@ def friends_list():
 
 
 
+# Route to favorite game
 @app.route('/favorite_game', methods=['POST'])
 def favorite_game():
+# Function to favorite a game, if the user is not logged in, flash message and return to login page, otherwise favorite the game and redirect to the search games page
     if 'user' not in session:
         flash('You must be logged in to favorite games')
         return redirect(url_for('login'))
@@ -481,8 +511,10 @@ def favorite_game():
 
 
 
+# Route to friend account page
 @app.route('/friend_account/<int:friend_id>')
 def friend_account(friend_id):
+# Function to display a friend's account, if the user is not logged in, flash message and return to login page, otherwise fetch the friend's information and favorite games, and render the friend's account page
     if 'user' not in session:
         flash('You must be logged in to view a friend\'s account')
         return redirect(url_for('login'))
@@ -509,9 +541,10 @@ def friend_account(friend_id):
 
 
 
-
+# Route to remove favorite game
 @app.route('/remove_favorite', methods=['POST'])
 def remove_favorite():
+# Function to remove a favorite game, if the user is not logged in, flash message and return to login page, otherwise remove the favorite game and redirect to the account page
     if 'user' not in session:
         flash('You must be logged in to remove favorites')
         return redirect(url_for('login'))
@@ -536,9 +569,10 @@ def remove_favorite():
 
 
 
-
+# Route to display tournaments page
 @app.route('/tournaments', methods=['GET'])
 def display_tournaments():
+# Function to display tournaments, if the user is not logged in, flash message and return to login page, otherwise fetch the tournaments created by the user or where the user has accepted an invitation, and render the tournaments page
     if 'user' not in session:
         flash('You must be logged in to view tournaments')
         return redirect(url_for('login'))
@@ -561,7 +595,11 @@ def display_tournaments():
     return render_template('display_tournaments.html', tournaments=tournaments)
 
 
+
+
+# Route to the tournament details page
 @app.route('/tournament_details/<int:tournament_id>')
+# Function to display tournament details, if the user is not logged in, flash message and return to login page, otherwise fetch the tournament details, attendees, selected game, and matches, and render the tournament details page
 def tournament_details(tournament_id):
     conn = sqlite3.connect('events3.db')
     cursor = conn.cursor()
@@ -611,8 +649,9 @@ def tournament_details(tournament_id):
 
 
 
-
+# Route to send tournament invite
 @app.route('/send_tournament_invite/<int:tournament_id>', methods=['POST'])
+# Function to send tournament invite, if the user is not logged in, flash message and return to login page, otherwise send the tournament invite and redirect to the tournament details page
 def send_tournament_invite(tournament_id):
     user_id = request.form.get('user_id')
     sender_id = session.get('user_id')
@@ -627,7 +666,10 @@ def send_tournament_invite(tournament_id):
     return redirect(url_for('tournament_details', tournament_id=tournament_id))
 
 
+
+# Route to respond to tournament invite
 @app.route('/respond_to_invite/<type>/<int:invite_id>', methods=['POST'])
+# Function to respond to tournament invite, if the user is not logged in, flash message and return to login page, otherwise respond to the tournament invite and redirect to the notifications page
 def respond_to_invite(type, invite_id):
     response = request.form.get('response')
 
@@ -667,7 +709,7 @@ def respond_to_invite(type, invite_id):
 
 
 
-
+# Route to search games for tournament
 @app.route('/search_games_for_tournament', methods=['GET', 'POST'])
 def search_games_for_tournament():
     if request.method == 'POST':
@@ -682,6 +724,7 @@ def search_games_for_tournament():
     return render_template('search_games.html')
 
 
+# Route to select game for tournament
 @app.route('/select_game', methods=['POST'])
 def select_game():
     game_id = request.form.get('game_id')
@@ -689,6 +732,7 @@ def select_game():
     return redirect(url_for('create_tournament'))
 
 
+# Route to create match
 @app.route('/create_match/<int:tournament_id>', methods=['GET', 'POST'])
 def create_match(tournament_id):
     if 'user' not in session or session.get('role') != 'coordinator':
@@ -721,6 +765,8 @@ def create_match(tournament_id):
     return render_template('create_match.html', attendees=attendees, tournament_id=tournament_id)
 
 
+
+# Route to record match result
 @app.route('/record_match_result', methods=['POST'])
 def record_match_result():
 
@@ -759,7 +805,7 @@ def record_match_result():
 
 
 
-
+# Route to search users
 @app.route('/search_users', methods=['GET', 'POST'])
 def search_users():
     if request.method == 'POST':
